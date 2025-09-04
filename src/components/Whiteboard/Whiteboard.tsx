@@ -364,6 +364,39 @@ export const Whiteboard: React.FC = () => {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    console.log('Redrawing', shapes.length, 'shapes');
+    
+    // Redraw all shapes (drawing strokes)
+    shapes.forEach((shape, index) => {
+      console.log(`Shape ${index}:`, shape.type, 'points:', shape.points?.length || 0, 'color:', shape.color);
+      ctx.strokeStyle = shape.color;
+      ctx.lineWidth = shape.lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      if (shape.type === 'path' && shape.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(shape.points[0].x, shape.points[0].y);
+        
+        for (let i = 1; i < shape.points.length; i++) {
+          ctx.lineTo(shape.points[i].x, shape.points[i].y);
+        }
+        
+        ctx.stroke();
+      } else if (shape.type === 'line' && shape.start && shape.end) {
+        ctx.beginPath();
+        ctx.moveTo(shape.start.x, shape.start.y);
+        ctx.lineTo(shape.end.x, shape.end.y);
+        ctx.stroke();
+      } else if (shape.type === 'rectangle' && shape.start && shape.width && shape.height) {
+        ctx.strokeRect(shape.start.x, shape.start.y, shape.width, shape.height);
+      } else if (shape.type === 'circle' && shape.center && shape.radius) {
+        ctx.beginPath();
+        ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    });
+    
     // Redraw all images
     uploadedImages.forEach(image => {
       ctx.drawImage(image.img, image.x, image.y, image.width, image.height);
@@ -389,10 +422,10 @@ export const Whiteboard: React.FC = () => {
     });
   }
 
-  // Redraw when images change
+  // Redraw when images or shapes change
   useEffect(() => {
     redrawAll();
-  }, [uploadedImages, selectedImage]);
+  }, [uploadedImages, selectedImage, shapes]);
 
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current?.getBoundingClientRect();
