@@ -369,7 +369,12 @@ export const Whiteboard: React.FC = () => {
     
     console.log('Redrawing', shapes.length, 'shapes');
     
-    // Redraw all shapes (drawing strokes)
+    // First, draw all images (so they appear behind shapes)
+    uploadedImages.forEach(image => {
+      ctx.drawImage(image.img, image.x, image.y, image.width, image.height);
+    });
+    
+    // Then, draw all shapes (drawing strokes) on top of images
     shapes.forEach((shape, index) => {
       console.log(`Shape ${index}:`, shape.type, 'points:', shape.points?.length || 0, 'color:', shape.color, 'tool:', shape.tool);
       
@@ -428,10 +433,8 @@ export const Whiteboard: React.FC = () => {
       ctx.globalCompositeOperation = 'source-over';
     });
     
-    // Redraw all images
+    // Finally, draw image selection borders and controls on top of everything
     uploadedImages.forEach(image => {
-      ctx.drawImage(image.img, image.x, image.y, image.width, image.height);
-      
       // Draw selection border if selected
       if (image.selected && image.id === selectedImage) {
         // Different border style for locked vs unlocked
@@ -715,7 +718,7 @@ export const Whiteboard: React.FC = () => {
           style={{
             cursor: tool === 'eraser' 
               ? `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="32" viewBox="0 0 40 32"><defs><linearGradient id="eraser-grad" x1="0%25" y1="0%25" x2="0%25" y2="100%25"><stop offset="0%25" style="stop-color:%234a5568"/><stop offset="100%25" style="stop-color:%232d3748"/></linearGradient><pattern id="eraser-texture" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.5" fill="%23fff" opacity="0.2"/></pattern></defs><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-grad)"/><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-texture)"/><rect x="8" y="18" width="24" height="8" rx="2" fill="%23fff"/><rect x="10" y="20" width="20" height="4" rx="1" fill="%23e2e8f0" opacity="0.8"/></svg>') 20 16, auto`
-              : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><defs><linearGradient id="pen-grad" x1="0%25" y1="0%25" x2="100%25" y2="100%25"><stop offset="0%25" style="stop-color:%236366f1"/><stop offset="100%25" style="stop-color:%234f46e5"/></linearGradient></defs><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="url(%23pen-grad)"/><path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="url(%23pen-grad)"/></svg>') 2 20, auto`
+              : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="${encodeURIComponent(color)}"/><path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="${encodeURIComponent(color)}"/></svg>') 2 20, auto`
           }}
           onMouseDown={(e) => {
             const rect = canvasRef.current?.getBoundingClientRect();
@@ -769,17 +772,17 @@ export const Whiteboard: React.FC = () => {
                     return;
                   }
                 } else {
-                  // If locked, just check if clicking on the image to keep it selected
+                  // If locked, allow drawing over it - don't return early
                   if (x >= image.x && x <= image.x + image.width &&
                       y >= image.y && y <= image.y + image.height) {
-                    return;
+                    // Just keep the locked image selected, but allow drawing to continue
                   }
                 }
               }
             }
             
             // Check if clicking on any image
-            let clickedImage = false;
+            let clickedOnUnlockedImage = false;
             for (const image of uploadedImages) {
               if (x >= image.x && x <= image.x + image.width &&
                   y >= image.y && y <= image.y + image.height) {
@@ -787,22 +790,37 @@ export const Whiteboard: React.FC = () => {
                 setUploadedImages(prev => prev.map(img => 
                   ({ ...img, selected: img.id === image.id })
                 ));
-                // Only start dragging if image is not locked
+                
                 if (!image.locked) {
+                  // Only prevent drawing if clicking on an unlocked image
                   setIsDraggingImage(true);
                   setDragOffset({ x: x - image.x, y: y - image.y });
+                  clickedOnUnlockedImage = true;
                 }
-                clickedImage = true;
+                // If image is locked, allow drawing over it by not setting clickedOnUnlockedImage
                 break;
               }
             }
             
-            // If not clicking on image, start drawing or deselect
-            if (!clickedImage) {
-              setSelectedImage(null);
-              setUploadedImages(prev => prev.map(img => 
-                ({ ...img, selected: false })
-              ));
+            // Start drawing if not clicking on an unlocked image
+            if (!clickedOnUnlockedImage) {
+              // Only deselect if not clicking on any image at all
+              let clickedOnAnyImage = false;
+              for (const image of uploadedImages) {
+                if (x >= image.x && x <= image.x + image.width &&
+                    y >= image.y && y <= image.y + image.height) {
+                  clickedOnAnyImage = true;
+                  break;
+                }
+              }
+              
+              if (!clickedOnAnyImage) {
+                setSelectedImage(null);
+                setUploadedImages(prev => prev.map(img => 
+                  ({ ...img, selected: false })
+                ));
+              }
+              
               startDrawing({ x, y });
             }
           }}
@@ -914,7 +932,7 @@ export const Whiteboard: React.FC = () => {
             if (canvas && !isDrawing) {
               canvas.style.cursor = tool === 'eraser' 
                 ? `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="32" viewBox="0 0 40 32"><defs><linearGradient id="eraser-grad" x1="0%25" y1="0%25" x2="0%25" y2="100%25"><stop offset="0%25" style="stop-color:%234a5568"/><stop offset="100%25" style="stop-color:%232d3748"/></linearGradient><pattern id="eraser-texture" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.5" fill="%23fff" opacity="0.2"/></pattern></defs><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-grad)"/><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-texture)"/><rect x="8" y="18" width="24" height="8" rx="2" fill="%23fff"/><rect x="10" y="20" width="20" height="4" rx="1" fill="%23e2e8f0" opacity="0.8"/></svg>') 20 16, auto`
-                : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><defs><linearGradient id="pen-grad" x1="0%25" y1="0%25" x2="100%25" y2="100%25"><stop offset="0%25" style="stop-color:%236366f1"/><stop offset="100%25" style="stop-color:%234f46e5"/></linearGradient></defs><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="url(%23pen-grad)"/><path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="url(%23pen-grad)"/></svg>') 2 20, auto`;
+                : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="${encodeURIComponent(color)}"/><path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="${encodeURIComponent(color)}"/></svg>') 2 20, auto`;
             }
           }}
           onMouseUp={() => {
@@ -1023,6 +1041,7 @@ export const Whiteboard: React.FC = () => {
             />
           </div>
         )}
+        
       </div>
 
       {/* Particle Effects */}
@@ -1051,8 +1070,6 @@ export const Whiteboard: React.FC = () => {
         tool={tool}
         color={color}
         lineWidth={lineWidth}
-        gridType={gridType}
-        snapToGrid={snapToGrid}
         onToolChange={(t: Tool) => { 
           setTool(t); 
           setToolAnimation({ show: true, tool: t });
@@ -1061,13 +1078,10 @@ export const Whiteboard: React.FC = () => {
         }}
         onColorChange={(c: Color) => { setColor(c); triggerHaptic(); }}
         onLineWidthChange={setLineWidth}
-        onGridTypeChange={(g: GridType) => { setGridType(g); triggerHaptic(); }}
-        onSnapToGridChange={(s: boolean) => { setSnapToGrid(s); triggerHaptic(); }}
         onUndo={undo}
         onRedo={redo}
         onClear={clearCanvas}
         onExport={exportToPNG}
-        onMathPanel={() => { setShowMathPanel(!showMathPanel); triggerHaptic(); }}
         onImageUpload={() => { setShowImageUpload(true); triggerHaptic(); }}
         canUndo={historyStep > 0}
         canRedo={historyStep < history.length - 1}

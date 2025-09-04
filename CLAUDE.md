@@ -21,13 +21,28 @@ This is a React + TypeScript whiteboard application built with Vite. The project
 ## Architecture
 
 ### Core Application Structure
+
 The application is a single-page React app centered around a whiteboard component with comprehensive drawing capabilities.
 
-**Main Components:**
+#### Entry Points
+- `src/main.tsx` - Application entry point, mounts React app to DOM
 - `src/App.tsx` - Root component that renders the Whiteboard
+
+#### Whiteboard Components
 - `src/components/Whiteboard/Whiteboard.tsx` - Main whiteboard component with canvas drawing logic, gesture handling, history management, image manipulation, and tool controls
+- `src/components/Whiteboard/WhiteboardToolbar.tsx` - Toolbar with drawing tools, colors, and controls
+- `src/components/Whiteboard/MathSymbolPanel.tsx` - Panel for inserting mathematical symbols
+- `src/components/Whiteboard/GridOverlay.tsx` - Grid overlay component for visual guides
+- `src/components/Whiteboard/ImageUpload.tsx` - Image upload handling component
 - `src/components/Whiteboard/SimpleWhiteboard.tsx` - Alternative simplified whiteboard implementation
-- `src/components/Whiteboard/types.ts` - TypeScript type definitions for the whiteboard system
+
+#### Custom Hooks
+- `src/components/Whiteboard/hooks/useDrawing.ts` - Drawing logic and canvas operations
+- `src/components/Whiteboard/hooks/useTouch.ts` - Touch event handling and multi-touch support
+- `src/components/Whiteboard/hooks/useGestures.ts` - Gesture recognition (pinch, zoom, pan)
+
+#### Type Definitions
+- `src/components/Whiteboard/types.ts` - TypeScript types for tools, colors, shapes, grid types, etc.
 
 ### Key Features & Implementation Details
 
@@ -76,39 +91,65 @@ The application is a single-page React app centered around a whiteboard componen
 - Custom whiteboard styles in `src/styles/whiteboard.css`
 - Responsive design with mobile touch support
 
+### Design Guidelines
+
+- Keep design consistent across all components and features
+- Maintain minimalistic, modern, fun and engaging aesthetic with **gaming feel**
+- **Target audience**: Grades 6-12 students - design should feel like a cool gaming interface
+- Use cool icons throughout the interface with gaming-inspired visual effects
+- Follow existing visual patterns (dark theme, glass-morphism effects) enhanced with gaming elements
+- Add subtle glow effects, dynamic animations, and gaming-style highlights
+- Match toolbar styling, colors, hover effects, and spacing with gaming aesthetic
+- Include neon accents, hover glows, and interactive feedback for engagement
+- Ensure responsive design works on all devices while maintaining gaming feel
+
 ## Development Workflow
 
-**Git Commit/Push Policy:**
+### Git Commit/Push Policy
+
 - NEVER commit or push changes automatically
 - ALWAYS ask the user for permission before committing
 - ALWAYS ask the user for permission before pushing
 - Only commit when explicitly requested by the user
 - Provide clear commit messages for review before committing
 
-## Project Status
+### Testing
 
-⚠️ Current build has TypeScript errors related to unused variables that need to be resolved
-⚠️ ESLint warnings about missing React Hook dependencies
+- Playwright is installed but no tests are implemented yet
+- Run tests with: `npx playwright test` (once tests are created)
+- Install Playwright browsers: `npx playwright install`
+
+### Code Quality
+
+- Run linting before committing: `npm run lint`
+- Type-check without building: `tsc --noEmit`
+- Fix TypeScript errors related to unused variables when encountered
+- Address ESLint warnings about missing React Hook dependencies
+
+## Known Issues
+
+- TypeScript errors related to unused variables that need to be resolved
+- ESLint warnings about missing React Hook dependencies
 
 ## Dependencies
 
-**Core:**
+### Core
 - React 19.1.1
 - TypeScript 5.8.3
 - Vite 7.1.2
 
-**UI/Interaction:**
+### UI/Interaction
 - react-dropzone 14.3.8 (for image upload)
 
-**Styling:**
+### Styling
 - Tailwind CSS 4.1.12
 - Autoprefixer 10.4.21
 - PostCSS 8.5.6
 
-**Testing:**
+### Testing
 - Playwright 1.55.0 (configured but no tests implemented yet)
 
-**Linting:**
+### Linting
 - ESLint 9.33.0
 - TypeScript ESLint 8.39.1
 - React hooks and refresh plugins
