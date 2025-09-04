@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a React + TypeScript whiteboard application built with Vite. The project provides an interactive drawing canvas with support for various tools, shapes, math symbols, grid overlays, and touch gestures.
+This is a React + TypeScript whiteboard application built with Vite. The project provides an interactive drawing canvas with support for various tools, shapes, math symbols, grid overlays, image uploads, and touch gestures.
 
 ## Commands
 
@@ -21,11 +21,11 @@ This is a React + TypeScript whiteboard application built with Vite. The project
 ## Architecture
 
 ### Core Application Structure
-The application is a single-page React app centered around a whiteboard component with drawing capabilities.
+The application is a single-page React app centered around a whiteboard component with comprehensive drawing capabilities.
 
 **Main Components:**
 - `src/App.tsx` - Root component that renders the Whiteboard
-- `src/components/Whiteboard/Whiteboard.tsx` - Main whiteboard component with canvas drawing logic, gesture handling, history management, and tool controls
+- `src/components/Whiteboard/Whiteboard.tsx` - Main whiteboard component with canvas drawing logic, gesture handling, history management, image manipulation, and tool controls
 - `src/components/Whiteboard/SimpleWhiteboard.tsx` - Alternative simplified whiteboard implementation
 - `src/components/Whiteboard/types.ts` - TypeScript type definitions for the whiteboard system
 
@@ -36,6 +36,13 @@ The application is a single-page React app centered around a whiteboard componen
 - Custom hooks for touch handling (`useTouch`), drawing logic (`useDrawing`), and gesture recognition (`useGestures`)
 - History system for undo/redo functionality using ImageData snapshots
 - Shape drawing support (circles, rectangles, lines, triangles, paths)
+- Particle effects for visual feedback during drawing and erasing
+
+**Image Management:**
+- Drag-and-drop image upload via `react-dropzone`
+- Image manipulation: move, resize, delete, lock/unlock
+- Image selection and layering support
+- Persistent image storage and redraw capabilities
 
 **Touch & Gesture Support:**
 - Multi-touch drawing and gesture recognition
@@ -45,10 +52,10 @@ The application is a single-page React app centered around a whiteboard componen
 
 **Grid System:**
 - Optional grid overlays with snap-to-grid functionality
-- Different grid types configurable through the toolbar
+- Different grid types (dots, lines, coordinate) configurable through the toolbar
 
 **Math Symbol Support:**
-- Math symbol panel for inserting mathematical notation
+- Math symbol panel (`MathSymbolPanel.tsx`) for inserting mathematical notation
 - Symbols rendered as text on the canvas
 
 ### Build Configuration
@@ -60,19 +67,19 @@ The application is a single-page React app centered around a whiteboard componen
 
 **TypeScript:**
 - Project references setup with separate configs for app and node
-- `tsconfig.app.json` - Application TypeScript config
+- `tsconfig.app.json` - Application TypeScript config with strict mode
 - `tsconfig.node.json` - Node/build tools TypeScript config
-- Strict type checking enabled
+- Strict type checking enabled with additional linting rules
 
 **Styling:**
 - Tailwind CSS v4 with PostCSS
 - Custom whiteboard styles in `src/styles/whiteboard.css`
+- Responsive design with mobile touch support
 
 ## Project Status
 
-✅ All TypeScript errors have been resolved
-✅ All required components and hooks have been implemented
-✅ Build and lint checks pass successfully
+⚠️ Current build has TypeScript errors related to unused variables that need to be resolved
+⚠️ ESLint warnings about missing React Hook dependencies
 
 ## Dependencies
 
@@ -80,6 +87,9 @@ The application is a single-page React app centered around a whiteboard componen
 - React 19.1.1
 - TypeScript 5.8.3
 - Vite 7.1.2
+
+**UI/Interaction:**
+- react-dropzone 14.3.8 (for image upload)
 
 **Styling:**
 - Tailwind CSS 4.1.12
