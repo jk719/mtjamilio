@@ -38,6 +38,7 @@ export const Whiteboard: React.FC = () => {
     width: number; 
     height: number;
     selected?: boolean;
+    locked?: boolean;
   }>>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
@@ -370,21 +371,54 @@ export const Whiteboard: React.FC = () => {
       
       // Draw selection border if selected
       if (image.selected && image.id === selectedImage) {
-        ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
+        // Different border style for locked vs unlocked
+        if (image.locked) {
+          ctx.strokeStyle = '#ef4444'; // Red for locked
+          ctx.lineWidth = 2;
+          ctx.setLineDash([10, 5]);
+        } else {
+          ctx.strokeStyle = '#6366f1'; // Blue for unlocked
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+        }
         ctx.strokeRect(image.x, image.y, image.width, image.height);
         ctx.setLineDash([]);
         
-        // Draw resize handles
-        const handleSize = 8;
-        ctx.fillStyle = '#6366f1';
+        // Only show resize handles if unlocked
+        if (!image.locked) {
+          // Draw resize handles
+          const handleSize = 8;
+          ctx.fillStyle = '#6366f1';
+          
+          // Corner handles
+          ctx.fillRect(image.x - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
+          ctx.fillRect(image.x - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
+        }
         
-        // Corner handles
-        ctx.fillRect(image.x - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
-        ctx.fillRect(image.x + image.width - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
-        ctx.fillRect(image.x - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
-        ctx.fillRect(image.x + image.width - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
+        // Draw control buttons (lock/unlock and delete)
+        const buttonSize = 24;
+        const buttonMargin = 5;
+        const buttonY = image.y - buttonSize - 10;
+        
+        // Lock/Unlock button
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(image.x, buttonY, buttonSize, buttonSize);
+        ctx.fillStyle = 'white';
+        ctx.font = '16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(image.locked ? '🔒' : '🔓', image.x + buttonSize/2, buttonY + buttonSize/2);
+        
+        // Delete button (only if unlocked)
+        if (!image.locked) {
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+          ctx.fillRect(image.x + buttonSize + buttonMargin, buttonY, buttonSize, buttonSize);
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('×', image.x + buttonSize + buttonMargin + buttonSize/2, buttonY + buttonSize/2);
+        }
       }
     });
   }
@@ -393,6 +427,34 @@ export const Whiteboard: React.FC = () => {
   useEffect(() => {
     redrawAll();
   }, [uploadedImages, selectedImage]);
+  
+  // Keyboard shortcuts for image manipulation
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (selectedImage) {
+        const image = uploadedImages.find(img => img.id === selectedImage);
+        if (!image) return;
+        
+        // Delete key to delete unlocked images
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !image.locked) {
+          e.preventDefault();
+          setUploadedImages(prev => prev.filter(img => img.id !== selectedImage));
+          setSelectedImage(null);
+        }
+        
+        // L key to toggle lock
+        if (e.key === 'l' || e.key === 'L') {
+          e.preventDefault();
+          setUploadedImages(prev => prev.map(img => 
+            img.id === selectedImage ? { ...img, locked: !img.locked } : img
+          ));
+        }
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage, uploadedImages]);
 
   function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -541,19 +603,52 @@ export const Whiteboard: React.FC = () => {
             if (selectedImage) {
               const image = uploadedImages.find(img => img.id === selectedImage);
               if (image) {
-                // Check for resize handle
-                const handle = getResizeHandle(x, y, image);
-                if (handle) {
-                  setIsResizingImage(handle);
+                // Check if clicking on control buttons
+                const buttonSize = 24;
+                const buttonMargin = 5;
+                const buttonY = image.y - buttonSize - 10;
+                
+                // Lock/Unlock button
+                if (x >= image.x && x <= image.x + buttonSize &&
+                    y >= buttonY && y <= buttonY + buttonSize) {
+                  setUploadedImages(prev => prev.map(img => 
+                    img.id === image.id ? { ...img, locked: !img.locked } : img
+                  ));
                   return;
                 }
                 
-                // Check if clicking on the image
-                if (x >= image.x && x <= image.x + image.width &&
-                    y >= image.y && y <= image.y + image.height) {
-                  setIsDraggingImage(true);
-                  setDragOffset({ x: x - image.x, y: y - image.y });
+                // Delete button (only if unlocked)
+                if (!image.locked && 
+                    x >= image.x + buttonSize + buttonMargin && 
+                    x <= image.x + buttonSize + buttonMargin + buttonSize &&
+                    y >= buttonY && y <= buttonY + buttonSize) {
+                  setUploadedImages(prev => prev.filter(img => img.id !== image.id));
+                  setSelectedImage(null);
                   return;
+                }
+                
+                // Only allow resize/drag if not locked
+                if (!image.locked) {
+                  // Check for resize handle
+                  const handle = getResizeHandle(x, y, image);
+                  if (handle) {
+                    setIsResizingImage(handle);
+                    return;
+                  }
+                  
+                  // Check if clicking on the image
+                  if (x >= image.x && x <= image.x + image.width &&
+                      y >= image.y && y <= image.y + image.height) {
+                    setIsDraggingImage(true);
+                    setDragOffset({ x: x - image.x, y: y - image.y });
+                    return;
+                  }
+                } else {
+                  // If locked, just check if clicking on the image to keep it selected
+                  if (x >= image.x && x <= image.x + image.width &&
+                      y >= image.y && y <= image.y + image.height) {
+                    return;
+                  }
                 }
               }
             }
@@ -567,8 +662,11 @@ export const Whiteboard: React.FC = () => {
                 setUploadedImages(prev => prev.map(img => 
                   ({ ...img, selected: img.id === image.id })
                 ));
-                setIsDraggingImage(true);
-                setDragOffset({ x: x - image.x, y: y - image.y });
+                // Only start dragging if image is not locked
+                if (!image.locked) {
+                  setIsDraggingImage(true);
+                  setDragOffset({ x: x - image.x, y: y - image.y });
+                }
                 clickedImage = true;
                 break;
               }
@@ -594,18 +692,21 @@ export const Whiteboard: React.FC = () => {
             
             // Handle image dragging
             if (isDraggingImage && selectedImage) {
-              setUploadedImages(prev => prev.map(img => 
-                img.id === selectedImage 
-                  ? { ...img, x: x - dragOffset.x, y: y - dragOffset.y }
-                  : img
-              ));
+              const image = uploadedImages.find(img => img.id === selectedImage);
+              if (image && !image.locked) {
+                setUploadedImages(prev => prev.map(img => 
+                  img.id === selectedImage 
+                    ? { ...img, x: x - dragOffset.x, y: y - dragOffset.y }
+                    : img
+                ));
+              }
               return;
             }
             
             // Handle image resizing
             if (isResizingImage && selectedImage) {
               const image = uploadedImages.find(img => img.id === selectedImage);
-              if (image) {
+              if (image && !image.locked) {
                 setUploadedImages(prev => prev.map(img => {
                   if (img.id === selectedImage) {
                     const aspectRatio = img.img.width / img.img.height;
