@@ -30,7 +30,9 @@ const ColorButton: React.FC<{ color: string; isActive: boolean; onClick: () => v
       width: '36px',
       height: '36px',
       borderRadius: '50%',
-      border: isActive ? `3px solid #60a5fa` : '2px solid rgba(255, 255, 255, 0.1)',
+      border: color === '#FFFFFF' ? 
+        (isActive ? `3px solid #60a5fa` : '2px solid rgba(100, 100, 100, 0.5)') : 
+        (isActive ? `3px solid #60a5fa` : '2px solid rgba(255, 255, 255, 0.1)'),
       transform: isActive ? 'scale(1.25) translateY(-3px)' : 'scale(1)',
       transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       cursor: 'pointer',
@@ -75,9 +77,13 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
 }) => {
   const colors: Color[] = [
     '#000000',  // Black
+    '#FFFFFF',  // White
     '#1e3a8a',  // Blue
     '#dc2626',  // Red
     '#16a34a',  // Green
+    '#f59e0b',  // Orange
+    '#8b5cf6',  // Purple
+    '#ec4899',  // Pink
   ];
 
   const toolbarStyle: React.CSSProperties = {
@@ -85,7 +91,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
     top: '20px',
     left: '50%',
     transform: 'translateX(-50%)',
-    backgroundColor: 'rgba(17, 24, 39, 0.95)', // Darker gaming background
+    backgroundColor: 'rgba(26, 26, 26, 0.98)', // Dark charcoal for maximum color pop
     backdropFilter: 'blur(15px)',
     borderRadius: '16px',
     padding: '12px 16px', // Reduced padding for compactness
@@ -94,12 +100,13 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
     gap: '12px', // Further reduced gap for compactness
     width: 'fit-content', // Only take up needed width
     boxShadow: `
-      0 0 40px rgba(59, 130, 246, 0.15),
-      0 10px 40px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1)
-    `, // Gaming glow effect
+      0 0 50px rgba(59, 130, 246, 0.08),
+      0 20px 60px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.5)
+    `, // Enhanced depth and glow
     zIndex: 10,
-    border: '1px solid rgba(59, 130, 246, 0.2)', // Blue gaming border
+    border: '1px solid rgba(255, 255, 255, 0.08)', // Subtle light border for contrast
     transition: 'all 0.3s ease'
   };
 
