@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { WhiteboardToolbar } from './WhiteboardToolbar';
 import { MathSymbolPanel } from './MathSymbolPanel';
 import { GridOverlay } from './GridOverlay';
+import { ImageUpload } from './ImageUpload';
 import { useDropzone } from 'react-dropzone';
 import { useTouch } from './hooks/useTouch';
 import { useDrawing } from './hooks/useDrawing';
@@ -23,6 +24,7 @@ export const Whiteboard: React.FC = () => {
   const [gridType, setGridType] = useState<GridType>('none');
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [showMathPanel, setShowMathPanel] = useState(false);
+  const [showImageUpload, setShowImageUpload] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -369,21 +371,46 @@ export const Whiteboard: React.FC = () => {
     
     // Redraw all shapes (drawing strokes)
     shapes.forEach((shape, index) => {
-      console.log(`Shape ${index}:`, shape.type, 'points:', shape.points?.length || 0, 'color:', shape.color);
-      ctx.strokeStyle = shape.color;
+      console.log(`Shape ${index}:`, shape.type, 'points:', shape.points?.length || 0, 'color:', shape.color, 'tool:', shape.tool);
+      
+      // Set composite operation based on tool used to create the shape
+      if (shape.tool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 1)'; // Color doesn't matter for destination-out
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = shape.color;
+      }
+      
       ctx.lineWidth = shape.lineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
       if (shape.type === 'path' && shape.points.length > 0) {
-        ctx.beginPath();
-        ctx.moveTo(shape.points[0].x, shape.points[0].y);
-        
-        for (let i = 1; i < shape.points.length; i++) {
-          ctx.lineTo(shape.points[i].x, shape.points[i].y);
+        if (shape.tool === 'eraser') {
+          // For eraser paths, draw rectangular areas at each point
+          shape.points.forEach(point => {
+            const eraserWidth = 40;
+            const eraserHeight = 30;
+            ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            ctx.fillRect(
+              point.x - eraserWidth / 2,
+              point.y - eraserHeight / 2,
+              eraserWidth,
+              eraserHeight
+            );
+          });
+        } else {
+          // Normal pen strokes
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0].x, shape.points[0].y);
+          
+          for (let i = 1; i < shape.points.length; i++) {
+            ctx.lineTo(shape.points[i].x, shape.points[i].y);
+          }
+          
+          ctx.stroke();
         }
-        
-        ctx.stroke();
       } else if (shape.type === 'line' && shape.start && shape.end) {
         ctx.beginPath();
         ctx.moveTo(shape.start.x, shape.start.y);
@@ -396,6 +423,9 @@ export const Whiteboard: React.FC = () => {
         ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, 2 * Math.PI);
         ctx.stroke();
       }
+      
+      // Reset composite operation
+      ctx.globalCompositeOperation = 'source-over';
     });
     
     // Redraw all images
@@ -430,27 +460,89 @@ export const Whiteboard: React.FC = () => {
           ctx.fillRect(image.x + image.width - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
         }
         
-        // Draw control buttons (lock/unlock and delete)
-        const buttonSize = 24;
-        const buttonMargin = 5;
-        const buttonY = image.y - buttonSize - 10;
+        // Draw control buttons (lock/unlock and delete) - Modern minimalistic design
+        const buttonSize = 32;
+        const buttonMargin = 8;
+        const buttonY = image.y - buttonSize - 12;
+        const cornerRadius = 8;
         
-        // Lock/Unlock button
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(image.x, buttonY, buttonSize, buttonSize);
-        ctx.fillStyle = 'white';
-        ctx.font = '16px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(image.locked ? '🔒' : '🔓', image.x + buttonSize/2, buttonY + buttonSize/2);
+        // Helper function to draw rounded rectangle
+        const drawRoundedRect = (x: number, y: number, width: number, height: number, radius: number) => {
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.arcTo(x + width, y, x + width, y + height, radius);
+          ctx.arcTo(x + width, y + height, x, y + height, radius);
+          ctx.arcTo(x, y + height, x, y, radius);
+          ctx.arcTo(x, y, x + width, y, radius);
+          ctx.closePath();
+        };
         
-        // Delete button (only if unlocked)
+        // Lock/Unlock button - Glass morphism style
+        const lockX = image.x;
+        drawRoundedRect(lockX, buttonY, buttonSize, buttonSize, cornerRadius);
+        ctx.fillStyle = image.locked ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)';
+        ctx.fill();
+        ctx.strokeStyle = image.locked ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Modern lock/unlock icon using paths
+        ctx.strokeStyle = image.locked ? '#ef4444' : '#22c55e';
+        ctx.fillStyle = image.locked ? '#ef4444' : '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        const centerX = lockX + buttonSize/2;
+        const centerY = buttonY + buttonSize/2;
+        
+        if (image.locked) {
+          // Locked icon - padlock
+          ctx.beginPath();
+          // Lock body
+          ctx.roundRect(centerX - 6, centerY - 2, 12, 8, 2);
+          ctx.fill();
+          // Lock shackle
+          ctx.beginPath();
+          ctx.arc(centerX, centerY - 4, 4, Math.PI, 0, false);
+          ctx.stroke();
+        } else {
+          // Unlocked icon - open padlock
+          ctx.beginPath();
+          // Lock body
+          ctx.roundRect(centerX - 6, centerY - 2, 12, 8, 2);
+          ctx.fill();
+          // Open shackle
+          ctx.beginPath();
+          ctx.arc(centerX - 2, centerY - 4, 4, Math.PI, Math.PI * 1.7, false);
+          ctx.stroke();
+        }
+        
+        // Delete button (only if unlocked) - Modern X with glass morphism
         if (!image.locked) {
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-          ctx.fillRect(image.x + buttonSize + buttonMargin, buttonY, buttonSize, buttonSize);
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 18px sans-serif';
-          ctx.fillText('×', image.x + buttonSize + buttonMargin + buttonSize/2, buttonY + buttonSize/2);
+          const deleteX = image.x + buttonSize + buttonMargin;
+          drawRoundedRect(deleteX, buttonY, buttonSize, buttonSize, cornerRadius);
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          
+          // Modern X icon
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          
+          const xCenter = deleteX + buttonSize/2;
+          const xCenterY = buttonY + buttonSize/2;
+          const iconSize = 8;
+          
+          ctx.beginPath();
+          ctx.moveTo(xCenter - iconSize/2, xCenterY - iconSize/2);
+          ctx.lineTo(xCenter + iconSize/2, xCenterY + iconSize/2);
+          ctx.moveTo(xCenter + iconSize/2, xCenterY - iconSize/2);
+          ctx.lineTo(xCenter - iconSize/2, xCenterY + iconSize/2);
+          ctx.stroke();
         }
       }
     });
@@ -636,10 +728,10 @@ export const Whiteboard: React.FC = () => {
             if (selectedImage) {
               const image = uploadedImages.find(img => img.id === selectedImage);
               if (image) {
-                // Check if clicking on control buttons
-                const buttonSize = 24;
-                const buttonMargin = 5;
-                const buttonY = image.y - buttonSize - 10;
+                // Check if clicking on control buttons (match new design)
+                const buttonSize = 32;
+                const buttonMargin = 8;
+                const buttonY = image.y - buttonSize - 12;
                 
                 // Lock/Unlock button
                 if (x >= image.x && x <= image.x + buttonSize &&
@@ -881,21 +973,55 @@ export const Whiteboard: React.FC = () => {
           </div>
         )}
         
-        {/* Eraser Preview */}
+        {/* Gaming-Style Eraser Preview */}
         {tool === 'eraser' && cursorPos && !isDrawing && (
           <div
             style={{
               position: 'absolute',
-              left: cursorPos.x - 20,
-              top: cursorPos.y - 15,
-              width: '40px',
-              height: '30px',
-              border: '2px dashed rgba(0, 0, 0, 0.5)',
-              backgroundColor: 'rgba(255, 255, 255, 0.3)',
+              left: cursorPos.x - 25,
+              top: cursorPos.y - 20,
+              width: '50px',
+              height: '40px',
+              border: '3px solid rgba(239, 68, 68, 0.8)',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
               pointerEvents: 'none',
-              borderRadius: '4px'
+              borderRadius: '12px',
+              boxShadow: `
+                0 0 20px rgba(239, 68, 68, 0.4),
+                0 0 40px rgba(239, 68, 68, 0.2),
+                inset 0 0 15px rgba(239, 68, 68, 0.1)
+              `,
+              backdropFilter: 'blur(2px)',
+              animation: 'eraserPulse 1.5s ease-in-out infinite alternate',
+              transform: 'scale(1.1)',
+              filter: 'brightness(1.2)'
             }}
-          />
+          >
+            {/* Inner glow effect */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: '6px',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              }}
+            />
+            {/* Center dot indicator */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '6px',
+                height: '6px',
+                backgroundColor: '#ef4444',
+                borderRadius: '50%',
+                boxShadow: '0 0 8px rgba(239, 68, 68, 0.8)'
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -942,8 +1068,10 @@ export const Whiteboard: React.FC = () => {
         onClear={clearCanvas}
         onExport={exportToPNG}
         onMathPanel={() => { setShowMathPanel(!showMathPanel); triggerHaptic(); }}
+        onImageUpload={() => { setShowImageUpload(true); triggerHaptic(); }}
         canUndo={historyStep > 0}
         canRedo={historyStep < history.length - 1}
+        toolAnimation={toolAnimation}
       />
 
       {showMathPanel && (
@@ -958,56 +1086,6 @@ export const Whiteboard: React.FC = () => {
       )}
 
 
-      {/* Tool Animation Indicator */}
-      {toolAnimation.show && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 100,
-            pointerEvents: 'none',
-            animation: 'fadeInOut 1s ease-out'
-          }}
-        >
-          <div
-            style={{
-              width: '120px',
-              height: '120px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            {toolAnimation.tool === 'pen' ? (
-              <svg width="60" height="60" fill="white" viewBox="0 0 24 24">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-              </svg>
-            ) : (
-              <svg width="60" height="60" fill="white" viewBox="0 0 24 24">
-                <path d="M15.14 3c.51 0 1.02.2 1.41.59l4.87 4.87c.78.78.78 2.05 0 2.83l-8.14 8.14L5.12 11.27l8.14-8.14c.39-.39.9-.59 1.41-.59m0-2c-1.03 0-2.06.39-2.83 1.17L3 11.59c-.78.78-.78 2.05 0 2.83l9.42 9.42c.39.39.9.59 1.41.59s1.02-.2 1.41-.59l8.59-8.59c.78-.78.78-2.05 0-2.83l-4.87-4.87C17.2 1.39 16.17 1 15.14 1zm-1.01 6.91L6.5 15.54 8.46 17.5l7.63-7.63-1.96-1.96z"/>
-              </svg>
-            )}
-          </div>
-          <div
-            style={{
-              marginTop: '10px',
-              textAlign: 'center',
-              color: 'rgba(0, 0, 0, 0.8)',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              letterSpacing: '2px'
-            }}
-          >
-            {toolAnimation.tool}
-          </div>
-        </div>
-      )}
 
       {/* Touch indicator for debugging */}
       {import.meta.env.DEV && touches.map((touch: TouchInfo, i: number) => (
@@ -1021,6 +1099,12 @@ export const Whiteboard: React.FC = () => {
           }}
         />
       ))}
+
+      <ImageUpload
+        isVisible={showImageUpload}
+        onClose={() => setShowImageUpload(false)}
+        onImageUpload={handleImageUpload}
+      />
     </div>
   );
 };

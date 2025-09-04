@@ -191,6 +191,7 @@ export const useDrawing = ({
           color,
           lineWidth,
           points: [],
+          tool,
           start: startPoint,
           end: endPoint,
         }]);
@@ -208,6 +209,7 @@ export const useDrawing = ({
           color,
           lineWidth,
           points: [],
+          tool,
           start: startPoint,
           width,
           height,
@@ -230,6 +232,7 @@ export const useDrawing = ({
           color,
           lineWidth,
           points: [],
+          tool,
           center: startPoint,
           radius,
         }]);
@@ -255,6 +258,7 @@ export const useDrawing = ({
             { x: startPoint.x, y: endPoint.y },
             { x: endPoint.x, y: endPoint.y },
           ],
+          tool,
         }]);
       } else if ((tool === 'pen' || tool === 'eraser') && currentPath.length > 1) {
         setShapes(prev => [...prev, {
@@ -263,6 +267,7 @@ export const useDrawing = ({
           color,
           lineWidth: tool === 'eraser' ? lineWidth * 2 : lineWidth,
           points: [...currentPath],
+          tool,
         }]);
       }
     }

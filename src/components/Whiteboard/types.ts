@@ -25,6 +25,7 @@ export interface Shape {
   color: Color;
   lineWidth: number;
   points: Point[];
+  tool?: Tool; // Track which tool was used to create this shape
   center?: Point;
   radius?: number;
   start?: Point;
