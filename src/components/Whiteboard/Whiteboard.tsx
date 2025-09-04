@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { WhiteboardToolbar } from './WhiteboardToolbar';
 import { MathSymbolPanel } from './MathSymbolPanel';
 import { GridOverlay } from './GridOverlay';
+import { useDropzone } from 'react-dropzone';
 import { useTouch } from './hooks/useTouch';
 import { useDrawing } from './hooks/useDrawing';
 import { useGestures } from './hooks/useGestures';
@@ -29,6 +30,19 @@ export const Whiteboard: React.FC = () => {
   const [toolAnimation, setToolAnimation] = useState<{ show: boolean; tool: Tool | null }>({ show: false, tool: null });
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; vx: number; vy: number; color: string; size: number; type: 'ink' | 'eraser' }>>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ 
+    id: string; 
+    img: HTMLImageElement; 
+    x: number; 
+    y: number; 
+    width: number; 
+    height: number;
+    selected?: boolean;
+  }>>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [isResizingImage, setIsResizingImage] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   
   const {
     isDrawing,
@@ -256,7 +270,7 @@ export const Whiteboard: React.FC = () => {
   }
 
   function createParticles(x: number, y: number, type: 'ink' | 'eraser') {
-    const newParticles = [];
+    const newParticles: Array<{ id: number; x: number; y: number; vx: number; vy: number; color: string; size: number; type: 'ink' | 'eraser' }> = [];
     const particleCount = type === 'eraser' ? 8 : 3;
     
     for (let i = 0; i < particleCount; i++) {
@@ -337,15 +351,169 @@ export const Whiteboard: React.FC = () => {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     clearShapes();
+    setUploadedImages([]);
+    setSelectedImage(null);
     saveToHistory();
   }
+
+  function redrawAll() {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Redraw all images
+    uploadedImages.forEach(image => {
+      ctx.drawImage(image.img, image.x, image.y, image.width, image.height);
+      
+      // Draw selection border if selected
+      if (image.selected && image.id === selectedImage) {
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(image.x, image.y, image.width, image.height);
+        ctx.setLineDash([]);
+        
+        // Draw resize handles
+        const handleSize = 8;
+        ctx.fillStyle = '#6366f1';
+        
+        // Corner handles
+        ctx.fillRect(image.x - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(image.x + image.width - handleSize/2, image.y - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(image.x - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
+        ctx.fillRect(image.x + image.width - handleSize/2, image.y + image.height - handleSize/2, handleSize, handleSize);
+      }
+    });
+  }
+
+  // Redraw when images change
+  useEffect(() => {
+    redrawAll();
+  }, [uploadedImages, selectedImage]);
+
+  function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Check if clicking on an image
+    let imageClicked = false;
+    uploadedImages.forEach(image => {
+      if (x >= image.x && x <= image.x + image.width &&
+          y >= image.y && y <= image.y + image.height) {
+        setSelectedImage(image.id);
+        setUploadedImages(prev => prev.map(img => 
+          ({ ...img, selected: img.id === image.id })
+        ));
+        imageClicked = true;
+      }
+    });
+    
+    // Deselect if clicking on empty space
+    if (!imageClicked) {
+      setSelectedImage(null);
+      setUploadedImages(prev => prev.map(img => 
+        ({ ...img, selected: false })
+      ));
+    }
+  }
+
+  function getResizeHandle(x: number, y: number, image: any): string | null {
+    const handleSize = 16;
+    const half = handleSize / 2;
+    
+    // Check corners
+    if (Math.abs(x - image.x) < half && Math.abs(y - image.y) < half) return 'nw';
+    if (Math.abs(x - (image.x + image.width)) < half && Math.abs(y - image.y) < half) return 'ne';
+    if (Math.abs(x - image.x) < half && Math.abs(y - (image.y + image.height)) < half) return 'sw';
+    if (Math.abs(x - (image.x + image.width)) < half && Math.abs(y - (image.y + image.height)) < half) return 'se';
+    
+    return null;
+  }
+
+  const handleImageUpload = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Calculate position and size to fit the image nicely on canvas
+        const maxWidth = canvas.width * 0.4;
+        const maxHeight = canvas.height * 0.4;
+        let width = img.width;
+        let height = img.height;
+
+        // Scale down if image is too large
+        if (width > maxWidth || height > maxHeight) {
+          const scale = Math.min(maxWidth / width, maxHeight / height);
+          width *= scale;
+          height *= scale;
+        }
+
+        // Center the image on canvas
+        const x = (canvas.width - width) / 2;
+        const y = (canvas.height - height) / 2;
+        
+        // Add image to state instead of drawing directly
+        const newImage = {
+          id: `img-${Date.now()}`,
+          img,
+          x,
+          y,
+          width,
+          height,
+          selected: true
+        };
+        
+        setUploadedImages(prev => [
+          ...prev.map(img => ({ ...img, selected: false })),
+          newImage
+        ]);
+        setSelectedImage(newImage.id);
+        
+        redrawAll();
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  // Setup dropzone for the entire canvas area
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      handleImageUpload(acceptedFiles[0]);
+    }
+  }, [handleImageUpload]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
+    },
+    multiple: false,
+    noClick: true, // We don't want clicks on canvas to trigger file dialog
+    noKeyboard: true,
+  });
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
       <div 
+        {...getRootProps()}
         ref={containerRef}
         className="absolute inset-0"
+        style={{
+          border: isDragActive ? '4px dashed #10b981' : 'none',
+          transition: 'border 0.3s ease',
+        }}
       >
+        <input {...getInputProps()} />
         {gridType !== 'none' && (
           <GridOverlay 
             type={gridType} 
@@ -364,30 +532,220 @@ export const Whiteboard: React.FC = () => {
           }}
           onMouseDown={(e) => {
             const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-              startDrawing({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+            if (!rect) return;
+            
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Check if clicking on a selected image
+            if (selectedImage) {
+              const image = uploadedImages.find(img => img.id === selectedImage);
+              if (image) {
+                // Check for resize handle
+                const handle = getResizeHandle(x, y, image);
+                if (handle) {
+                  setIsResizingImage(handle);
+                  return;
+                }
+                
+                // Check if clicking on the image
+                if (x >= image.x && x <= image.x + image.width &&
+                    y >= image.y && y <= image.y + image.height) {
+                  setIsDraggingImage(true);
+                  setDragOffset({ x: x - image.x, y: y - image.y });
+                  return;
+                }
+              }
+            }
+            
+            // Check if clicking on any image
+            let clickedImage = false;
+            for (const image of uploadedImages) {
+              if (x >= image.x && x <= image.x + image.width &&
+                  y >= image.y && y <= image.y + image.height) {
+                setSelectedImage(image.id);
+                setUploadedImages(prev => prev.map(img => 
+                  ({ ...img, selected: img.id === image.id })
+                ));
+                setIsDraggingImage(true);
+                setDragOffset({ x: x - image.x, y: y - image.y });
+                clickedImage = true;
+                break;
+              }
+            }
+            
+            // If not clicking on image, start drawing or deselect
+            if (!clickedImage) {
+              setSelectedImage(null);
+              setUploadedImages(prev => prev.map(img => 
+                ({ ...img, selected: false })
+              ));
+              startDrawing({ x, y });
             }
           }}
           onMouseMove={(e) => {
             const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-              const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-              setCursorPos(point);
-              if (isDrawing) {
-                draw(point);
-                // Create particles only when erasing
-                if (tool === 'eraser' && Math.random() > 0.7) { // Don't create particles every frame
-                  createParticles(e.clientX, e.clientY, 'eraser');
+            if (!rect) return;
+            
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = { x, y };
+            setCursorPos(point);
+            
+            // Handle image dragging
+            if (isDraggingImage && selectedImage) {
+              setUploadedImages(prev => prev.map(img => 
+                img.id === selectedImage 
+                  ? { ...img, x: x - dragOffset.x, y: y - dragOffset.y }
+                  : img
+              ));
+              return;
+            }
+            
+            // Handle image resizing
+            if (isResizingImage && selectedImage) {
+              const image = uploadedImages.find(img => img.id === selectedImage);
+              if (image) {
+                setUploadedImages(prev => prev.map(img => {
+                  if (img.id === selectedImage) {
+                    const aspectRatio = img.img.width / img.img.height;
+                    let newWidth = img.width;
+                    let newHeight = img.height;
+                    let newX = img.x;
+                    let newY = img.y;
+                    
+                    switch(isResizingImage) {
+                      case 'se': // Bottom-right
+                        newWidth = x - img.x;
+                        newHeight = newWidth / aspectRatio;
+                        break;
+                      case 'sw': // Bottom-left
+                        newWidth = img.x + img.width - x;
+                        newHeight = newWidth / aspectRatio;
+                        newX = x;
+                        break;
+                      case 'ne': // Top-right
+                        newWidth = x - img.x;
+                        newHeight = newWidth / aspectRatio;
+                        newY = img.y + img.height - newHeight;
+                        break;
+                      case 'nw': // Top-left
+                        newWidth = img.x + img.width - x;
+                        newHeight = newWidth / aspectRatio;
+                        newX = x;
+                        newY = img.y + img.height - newHeight;
+                        break;
+                    }
+                    
+                    // Minimum size
+                    if (newWidth < 50 || newHeight < 50) return img;
+                    
+                    return { ...img, x: newX, y: newY, width: newWidth, height: newHeight };
+                  }
+                  return img;
+                }));
+              }
+              return;
+            }
+            
+            // Handle drawing
+            if (isDrawing) {
+              draw(point);
+              // Create particles only when erasing
+              if (tool === 'eraser' && Math.random() > 0.7) {
+                createParticles(e.clientX, e.clientY, 'eraser');
+              }
+            }
+            
+            // Update cursor based on hover
+            if (selectedImage) {
+              const image = uploadedImages.find(img => img.id === selectedImage);
+              if (image) {
+                const handle = getResizeHandle(x, y, image);
+                if (handle) {
+                  const canvas = canvasRef.current;
+                  if (canvas) {
+                    if (handle === 'nw' || handle === 'se') {
+                      canvas.style.cursor = 'nwse-resize';
+                    } else {
+                      canvas.style.cursor = 'nesw-resize';
+                    }
+                    return;
+                  }
+                }
+                
+                if (x >= image.x && x <= image.x + image.width &&
+                    y >= image.y && y <= image.y + image.height) {
+                  const canvas = canvasRef.current;
+                  if (canvas) canvas.style.cursor = 'move';
+                  return;
                 }
               }
             }
+            
+            // Reset cursor
+            const canvas = canvasRef.current;
+            if (canvas && !isDrawing) {
+              canvas.style.cursor = tool === 'eraser' 
+                ? `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="32" viewBox="0 0 40 32"><defs><linearGradient id="eraser-grad" x1="0%25" y1="0%25" x2="0%25" y2="100%25"><stop offset="0%25" style="stop-color:%234a5568"/><stop offset="100%25" style="stop-color:%232d3748"/></linearGradient><pattern id="eraser-texture" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.5" fill="%23fff" opacity="0.2"/></pattern></defs><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-grad)"/><rect x="5" y="8" width="30" height="20" rx="4" fill="url(%23eraser-texture)"/><rect x="8" y="18" width="24" height="8" rx="2" fill="%23fff"/><rect x="10" y="20" width="20" height="4" rx="1" fill="%23e2e8f0" opacity="0.8"/></svg>') 20 16, auto`
+                : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><defs><linearGradient id="pen-grad" x1="0%25" y1="0%25" x2="100%25" y2="100%25"><stop offset="0%25" style="stop-color:%236366f1"/><stop offset="100%25" style="stop-color:%234f46e5"/></linearGradient></defs><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="url(%23pen-grad)"/><path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="url(%23pen-grad)"/></svg>') 2 20, auto`;
+            }
           }}
-          onMouseUp={stopDrawing}
+          onMouseUp={() => {
+            stopDrawing();
+            setIsDraggingImage(false);
+            setIsResizingImage(null);
+          }}
           onMouseLeave={() => {
             stopDrawing();
             setCursorPos(null);
           }}
         />
+        
+        {/* Drag Indicator */}
+        {isDragActive && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              zIndex: 50,
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'rgba(31, 41, 55, 0.95)',
+                borderRadius: '20px',
+                padding: '30px',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+                border: '3px dashed #10b981',
+              }}
+            >
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ margin: '0 auto 10px' }}
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <p style={{ color: '#10b981', fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                Drop image here
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* Eraser Preview */}
         {tool === 'eraser' && cursorPos && !isDrawing && (
@@ -464,6 +822,7 @@ export const Whiteboard: React.FC = () => {
           onClose={() => setShowMathPanel(false)}
         />
       )}
+
 
       {/* Tool Animation Indicator */}
       {toolAnimation.show && (
