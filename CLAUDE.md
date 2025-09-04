@@ -76,6 +76,15 @@ The application is a single-page React app centered around a whiteboard componen
 - Custom whiteboard styles in `src/styles/whiteboard.css`
 - Responsive design with mobile touch support
 
+## Development Workflow
+
+**Git Commit/Push Policy:**
+- NEVER commit or push changes automatically
+- ALWAYS ask the user for permission before committing
+- ALWAYS ask the user for permission before pushing
+- Only commit when explicitly requested by the user
+- Provide clear commit messages for review before committing
+
 ## Project Status
 
 ⚠️ Current build has TypeScript errors related to unused variables that need to be resolved
